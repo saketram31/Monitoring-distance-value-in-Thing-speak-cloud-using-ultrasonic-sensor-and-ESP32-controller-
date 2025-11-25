@@ -1,6 +1,6 @@
-# Monitoring-distance-value-in-Thing-speak-cloud-using-ultrasonic-sensor-and-ESP32-controller
-
 # Uploading ultrasonic sensor data in Thing Speak cloud
+### NAME: R SAKETRAM
+### REG.NO : 212223230181
 
 # AIM:
 To monitor the distance of the obstacle in the Thing speak cloud using ultrasonic sensor and ESP32 controller.
@@ -96,8 +96,154 @@ Prototype and build IoT systems without setting up servers or developing web sof
 
  
 # PROGRAM:
+```
+#include <SoftwareSerial.h>
+#include <Adafruit_Sensor.h>
+
+#define triggerpin 8                 // trigger pin connected to the ultrosonic sensor 
+#define echopin 9                   // techo pin connected to the ultrosonic sensor 
+
+int duration, inches, cm;
+String inputString = "";         // a String to hold incoming data
+bool stringComplete = false;     // whether the string is complete
+long old_time=millis();
+long new_time;
+long uplink_interval=30000;      //ms
+bool time_to_at_recvb=false;
+bool get_LA66_data_status=false;
+bool network_joined_status=false;
+char rxbuff[128];
+uint8_t rxbuff_index=0;
+
+SoftwareSerial ss(10, 11);       // Create a SoftwareSerial port on Arduino pins 10 (RX) and 11 (TX)
+
+void setup() {
+  pinMode(triggerpin,OUTPUT);
+  pinMode(echopin,INPUT);
+  Serial.begin(9600);
+  ss.begin(9600);
+  ss.listen();
+
+  inputString.reserve(200);
+  sensor_t sensor;
+  ss.println("ATZ");//reset LA66
+}
+
+void loop() {
+new_time = millis();
+if((new_time-old_time>=uplink_interval)&&(network_joined_status==1)){
+    old_time = new_time;
+    get_LA66_data_status=false;
+    HC04();      
+    char sensor_data_buff[128]="\0";            
+    snprintf(sensor_data_buff,128,"AT+SENDB=%d,%d,%d,%02X%02X",0,2,2,(short)(inches),(short)(cm));
+    ss.println(sensor_data_buff);
+  }
+  if(time_to_at_recvb==true){
+    time_to_at_recvb=false;
+    get_LA66_data_status=true;
+    delay(1000);    
+    ss.println("AT+CFG");    
+  }
+    while ( ss.available()) {
+    char inChar = (char) ss.read();
+     inputString += inChar;
+    rxbuff[rxbuff_index++]=inChar;
+    if(rxbuff_index>128)
+    break;
+    
+      if (inChar == '\n' || inChar == '\r') {
+      stringComplete = true;
+      rxbuff[rxbuff_index]='\0';
+       if(strncmp(rxbuff,"JOINED",6)==0){
+        network_joined_status=1;
+      }
+      if(strncmp(rxbuff,"Dragino LA66 Device",19)==0){
+        network_joined_status=0;
+      }
+      if(strncmp(rxbuff,"Run AT+RECVB=? to see detail",28)==0){
+        time_to_at_recvb=true;
+        stringComplete=false;
+        inputString = "\0";
+      }
+      if(strncmp(rxbuff,"AT+RECVB=",9)==0){       
+        stringComplete=false;
+        inputString = "\0";
+        Serial.print("\r\nGet downlink data(FPort & Payload) ");
+        Serial.println(&rxbuff[9]);
+      }
+       rxbuff_index=0;
+      if(get_LA66_data_status==true){
+        stringComplete=false;
+        inputString = "\0";
+      }
+    }
+  }
+
+   while ( Serial.available()) {
+    char inChar = (char) Serial.read();
+    inputString += inChar;
+    if (inChar == '\n' || inChar == '\r') {
+      ss.print(inputString);
+      inputString = "\0";
+    }
+  }
+ 
+  if (stringComplete) {
+    Serial.print(inputString);
+    
+    // clear the string:
+    inputString = "\0";
+    stringComplete = false;
+  }
+}
+
+void HC04()
+{
+   digitalWrite(triggerpin, LOW);
+   delayMicroseconds(2);
+   digitalWrite(triggerpin, HIGH);
+   delayMicroseconds(10);
+   digitalWrite(triggerpin, LOW);
+   duration = pulseIn(echopin, HIGH);
+   inches = microsecondsToInches(duration);
+   cm = microsecondsToCentimeters(duration);
+   Serial.print(inches);
+   Serial.print("in, ");
+   Serial.print(cm);
+   Serial.print("cm");
+   Serial.println();
+}
+long microsecondsToInches(long microseconds) 
+{
+   return microseconds / 74 / 2;
+}
+long microsecondsToCentimeters(long microseconds) 
+{
+   return microseconds / 29 / 2;
+}
+
+/*function Decoder(bytes, port) {
+  // Extract distance from the first two bytes
+  var distance = (bytes[0] << 8) + bytes[1];
+
+  // Convert to centimeters (assuming millimeters are being sent)
+  var distance_in_cm = distance / 100;
+
+  return {
+    "distance": distance_in_cm
+  };
+}*/
+```
+
+
 # CIRCUIT DIAGRAM:
+![WhatsApp Image 2025-11-12 at 10 12 28_395f92be](https://github.com/user-attachments/assets/4babe20a-ea09-4874-9110-c55e01de8e31)
+
 # OUTPUT:
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/f9064960-535b-4536-8344-7c4e7e6370a7" />
+
+
 # RESULT:
 Thus the distance values are updated in the Thing speak cloud using ESP32 controller.
 
